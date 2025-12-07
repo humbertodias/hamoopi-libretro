@@ -18,9 +18,10 @@ hamoopi_input_t hamoopi_input[2] = {};
 
 // Collision box types - stores raw offsets from INI file
 // These are relative to the player position and need facing direction applied
+// After applying facing direction, x1 and x2 may need normalization to ensure x1 < x2
 typedef struct {
-    float x1, y1;   // Top-left corner offset
-    float x2, y2;   // Bottom-right corner offset
+    float x1, y1;   // First corner offset (from INI file)
+    float x2, y2;   // Second corner offset (from INI file)
 } CollisionBox;
 
 // Sprite animation system
@@ -370,9 +371,15 @@ static bool boxes_overlap(CollisionBox a, CollisionBox b)
 // Debug visualization for hitboxes
 static bool show_debug_boxes = false;
 
+// Helper to check if a collision box is valid (has non-zero size)
+static bool is_valid_box(CollisionBox box)
+{
+    return (box.x2 - box.x1) > 0 && (box.y2 - box.y1) > 0;
+}
+
 static void draw_debug_box(BITMAP* dest, CollisionBox box, int color)
 {
-    if (show_debug_boxes && (box.x2 - box.x1) > 0 && (box.y2 - box.y1) > 0)
+    if (show_debug_boxes && is_valid_box(box))
     {
         rect(dest, (int)box.x1, (int)box.y1, 
              (int)box.x2, (int)box.y2, color);
@@ -2592,7 +2599,7 @@ void hamoopi_run_frame(void)
             CollisionBox p1_clash = get_clash_box(p1);
             CollisionBox p2_clash = get_clash_box(p2);
             
-            if (boxes_overlap(p1_clash, p2_clash) && (p1_clash.x2 - p1_clash.x1) > 0 && (p2_clash.x2 - p2_clash.x1) > 0)
+            if (boxes_overlap(p1_clash, p2_clash) && is_valid_box(p1_clash) && is_valid_box(p2_clash))
             {
                 // Attacks clash! Cancel both attacks
                 p1->state = 0;
