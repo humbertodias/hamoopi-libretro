@@ -1557,9 +1557,11 @@ static void load_chbox_ini(int char_id, const char* char_name)
                 while (end > key && (*end == ' ' || *end == '\t')) *end-- = '\0';
                 
                 // Parse HurtBox or HitBox with index and coordinate
-                if (strncmp(key, "HurtBox", 7) == 0 && strlen(key) >= 9)
+                // HurtBox format: "HurtBox01x1" (min 11 chars)
+                // HitBox format: "HitBox01x1" (min 10 chars)
+                if (strncmp(key, "HurtBox", 7) == 0 && strlen(key) >= 11)
                 {
-                    // Validate that key[7] and key[8] are digits
+                    // Validate that key[7] and key[8] are digits (box number 01-09)
                     if (key[7] >= '0' && key[7] <= '9' && key[8] >= '0' && key[8] <= '9')
                     {
                         int box_num = (key[7] - '0') * 10 + (key[8] - '0');  // e.g., "01" -> 1
@@ -1573,9 +1575,9 @@ static void load_chbox_ini(int char_id, const char* char_name)
                         }
                     }
                 }
-                else if (strncmp(key, "HitBox", 6) == 0 && strlen(key) >= 8)
+                else if (strncmp(key, "HitBox", 6) == 0 && strlen(key) >= 10)
                 {
-                    // Validate that key[6] and key[7] are digits
+                    // Validate that key[6] and key[7] are digits (box number 01-09)
                     if (key[6] >= '0' && key[6] <= '9' && key[7] >= '0' && key[7] <= '9')
                     {
                         int box_num = (key[6] - '0') * 10 + (key[7] - '0');  // e.g., "01" -> 1
