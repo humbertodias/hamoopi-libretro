@@ -1,0 +1,75 @@
+# Makefile for HAMOOPI libretro core
+
+TARGET_NAME := hamoopi
+
+# Platform detection
+ifeq ($(platform),)
+   platform = unix
+   ifeq ($(shell uname -a),)
+      platform = win
+   else ifneq ($(findstring MINGW,$(shell uname -a)),)
+      platform = win
+   else ifneq ($(findstring Darwin,$(shell uname -a)),)
+      platform = osx
+   else ifneq ($(findstring win,$(shell uname -a)),)
+      platform = win
+   endif
+endif
+
+# System platform
+system_platform = unix
+ifeq ($(shell uname -a),)
+   EXE_EXT = .exe
+   system_platform = win
+else ifneq ($(findstring Darwin,$(shell uname -a)),)
+   system_platform = osx
+else ifneq ($(findstring MINGW,$(shell uname -a)),)
+   system_platform = win
+endif
+
+# Compilers
+CC  = gcc
+CXX = g++
+
+# Flags
+CFLAGS   = -O2 -fPIC
+CXXFLAGS = -O2 -fPIC -std=c++11
+LDFLAGS  = -shared
+
+# Includes and libraries
+INCFLAGS = -I.
+LIBS     = -lalleg
+
+# Platform-specific settings
+ifeq ($(platform), unix)
+   TARGET := $(TARGET_NAME)_libretro.so
+   fpic := -fPIC
+   LDFLAGS += -Wl,--no-undefined -Wl,--version-script=link.T
+else ifeq ($(platform), osx)
+   TARGET := $(TARGET_NAME)_libretro.dylib
+   fpic := -fPIC
+   LDFLAGS += -dynamiclib
+else ifeq ($(platform), win)
+   TARGET := $(TARGET_NAME)_libretro.dll
+   LDFLAGS += -static-libgcc -static-libstdc++
+endif
+
+# Source files
+SOURCES := libretro.cpp hamoopi_core.cpp
+
+# Object files
+OBJECTS := $(SOURCES:.cpp=.o)
+
+# Build rules
+all: $(TARGET)
+
+$(TARGET): $(OBJECTS)
+	$(CXX) $(fpic) $(LDFLAGS) -o $@ $(OBJECTS) $(LIBS)
+
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) $(fpic) $(INCFLAGS) -c -o $@ $<
+
+clean:
+	rm -f $(OBJECTS) $(TARGET)
+
+.PHONY: all clean

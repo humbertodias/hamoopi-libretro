@@ -1,0 +1,13 @@
+*.o
+build
+.idea
+cmake-build-debug
+
+# Libretro build artifacts (but keep .info file)
+*.so
+*.dylib
+*.dll
+!hamoopi_libretro.info
+
+# CodeQL build artifacts
+_codeql_*
