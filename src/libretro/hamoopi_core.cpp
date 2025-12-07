@@ -154,32 +154,39 @@ static CollisionBox get_hurtbox(Player* p)
     CollisionBox box;
     
     // Get current animation state ID
-    int state_id = 0;  // Default idle
+    int state_id = 0;  // Default idle (100 in HAMOOPI)
     if (p->state == 1) state_id = p->facing > 0 ? 420 : 410;  // Walk
     else if (p->state == 2) state_id = 300;  // Jump
     else if (p->state == 3) state_id = 151;  // Attack
     else if (p->state == 5) state_id = 200;  // Crouch
     else if (p->state == 6) state_id = 201;  // Crouch attack
     else if (p->is_blocking && p->is_crouching) state_id = 208;  // Crouch block
+    else state_id = 100;  // Idle stance
     
     // Try to load from INI data
     CollisionBoxConfig* config = find_collision_box_config(p->character_id, state_id, p->anim_frame);
     if (config && config->hurtbox_count > 0)
     {
         // Use first hurtbox from INI, adjusted for player position and facing
+        // Following HAMOOPI standalone formula: x = (player.x) + (facing * offset_x)
         CollisionBox ini_box = config->hurtboxes[0];
-        if (p->facing > 0)
+        
+        // Apply facing direction to X coordinate (mirrors the box)
+        // Standalone formula: int hb_x1 = (P.x) + (P.Lado * HurtBox_x1)
+        float hb_x1 = p->x + (p->facing * ini_box.x);
+        float hb_x2 = p->x + (p->facing * (ini_box.x + ini_box.w));
+        
+        // Normalize to ensure x1 < x2
+        if (hb_x1 > hb_x2)
         {
-            box.x = p->x + ini_box.x;
-            box.y = p->y + ini_box.y;
+            float temp = hb_x1;
+            hb_x1 = hb_x2;
+            hb_x2 = temp;
         }
-        else
-        {
-            // Mirror for left-facing
-            box.x = p->x - ini_box.x - ini_box.w;
-            box.y = p->y + ini_box.y;
-        }
-        box.w = ini_box.w;
+        
+        box.x = hb_x1;
+        box.y = p->y + ini_box.y;
+        box.w = hb_x2 - hb_x1;
         box.h = ini_box.h;
         return box;
     }
@@ -236,19 +243,25 @@ static CollisionBox get_hitbox(Player* p)
     if (config && config->hitbox_count > 0 && p->attack_frame >= 2 && p->attack_frame <= 6)
     {
         // Use first hitbox from INI, adjusted for player position and facing
+        // Following HAMOOPI standalone formula: x = (player.x) + (facing * offset_x)
         CollisionBox ini_box = config->hitboxes[0];
-        if (p->facing > 0)
+        
+        // Apply facing direction to X coordinate (mirrors the box)
+        // Standalone formula: int hb_x1 = (P.x) + (P.Lado * HitBox_x1)
+        float hb_x1 = p->x + (p->facing * ini_box.x);
+        float hb_x2 = p->x + (p->facing * (ini_box.x + ini_box.w));
+        
+        // Normalize to ensure x1 < x2
+        if (hb_x1 > hb_x2)
         {
-            box.x = p->x + ini_box.x;
-            box.y = p->y + ini_box.y;
+            float temp = hb_x1;
+            hb_x1 = hb_x2;
+            hb_x2 = temp;
         }
-        else
-        {
-            // Mirror for left-facing
-            box.x = p->x - ini_box.x - ini_box.w;
-            box.y = p->y + ini_box.y;
-        }
-        box.w = ini_box.w;
+        
+        box.x = hb_x1;
+        box.y = p->y + ini_box.y;
+        box.w = hb_x2 - hb_x1;
         box.h = ini_box.h;
         return box;
     }
@@ -1452,6 +1465,16 @@ static void load_chbox_ini(int char_id, const char* char_name)
     int current_frame = -1;
     CollisionBoxConfig* current_box_config = NULL;
     
+    // Temporary storage for building collision boxes (up to 9 boxes of each type)
+    int hurtbox_x1[9] = {-5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555};
+    int hurtbox_y1[9] = {-5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555};
+    int hurtbox_x2[9] = {-5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555};
+    int hurtbox_y2[9] = {-5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555};
+    int hitbox_x1[9] = {5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555};
+    int hitbox_y1[9] = {5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555};
+    int hitbox_x2[9] = {5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555};
+    int hitbox_y2[9] = {5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555};
+    
     while (pack_fgets(line, sizeof(line), fp))
     {
         char* start = line;
@@ -1461,6 +1484,47 @@ static void load_chbox_ini(int char_id, const char* char_name)
         // Check for section header [NNN_FF]
         if (*start == '[')
         {
+            // Finalize previous section if any
+            if (current_box_config)
+            {
+                // Build collision boxes from accumulated data
+                for (int i = 0; i < 9; i++)
+                {
+                    if (hurtbox_x1[i] != -5555 && hurtbox_y1[i] != -5555 && 
+                        hurtbox_x2[i] != -5555 && hurtbox_y2[i] != -5555 &&
+                        current_box_config->hurtbox_count < MAX_COLLISION_BOXES)
+                    {
+                        CollisionBox box;
+                        box.x = hurtbox_x1[i];
+                        box.y = hurtbox_y1[i];
+                        box.w = hurtbox_x2[i] - hurtbox_x1[i];
+                        box.h = hurtbox_y2[i] - hurtbox_y1[i];
+                        current_box_config->hurtboxes[current_box_config->hurtbox_count++] = box;
+                    }
+                }
+                for (int i = 0; i < 9; i++)
+                {
+                    if (hitbox_x1[i] != 5555 && hitbox_y1[i] != 5555 && 
+                        hitbox_x2[i] != 5555 && hitbox_y2[i] != 5555 &&
+                        current_box_config->hitbox_count < MAX_COLLISION_BOXES)
+                    {
+                        CollisionBox box;
+                        box.x = hitbox_x1[i];
+                        box.y = hitbox_y1[i];
+                        box.w = hitbox_x2[i] - hitbox_x1[i];
+                        box.h = hitbox_y2[i] - hitbox_y1[i];
+                        current_box_config->hitboxes[current_box_config->hitbox_count++] = box;
+                    }
+                }
+            }
+            
+            // Reset temporary storage
+            for (int i = 0; i < 9; i++)
+            {
+                hurtbox_x1[i] = hurtbox_y1[i] = hurtbox_x2[i] = hurtbox_y2[i] = -5555;
+                hitbox_x1[i] = hitbox_y1[i] = hitbox_x2[i] = hitbox_y2[i] = 5555;
+            }
+            
             int state_id, frame;
             if (sscanf(start, "[%d_%d]", &state_id, &frame) == 2)
             {
@@ -1478,25 +1542,73 @@ static void load_chbox_ini(int char_id, const char* char_name)
         }
         else if (current_box_config)
         {
-            // Parse collision box coordinates
+            // Parse collision box coordinates in format: HurtBox01x1 = value
             char key[64];
-            int x1, y1, x2, y2;
-            if (sscanf(start, "%[^=]=%d,%d,%d,%d", key, &x1, &y1, &x2, &y2) == 5)
+            int value;
+            if (sscanf(start, "%[^=]=%d", key, &value) == 2)
+            {
+                // Trim whitespace from key
+                char* end = key + strlen(key) - 1;
+                while (end > key && (*end == ' ' || *end == '\t')) *end-- = '\0';
+                
+                // Parse HurtBox or HitBox with index and coordinate
+                if (strncmp(key, "HurtBox", 7) == 0)
+                {
+                    int box_num = (key[7] - '0') * 10 + (key[8] - '0');  // e.g., "01" -> 1
+                    if (box_num >= 1 && box_num <= 9)
+                    {
+                        int idx = box_num - 1;
+                        if (strstr(key, "x1")) hurtbox_x1[idx] = value;
+                        else if (strstr(key, "y1")) hurtbox_y1[idx] = value;
+                        else if (strstr(key, "x2")) hurtbox_x2[idx] = value;
+                        else if (strstr(key, "y2")) hurtbox_y2[idx] = value;
+                    }
+                }
+                else if (strncmp(key, "HitBox", 6) == 0)
+                {
+                    int box_num = (key[6] - '0') * 10 + (key[7] - '0');  // e.g., "01" -> 1
+                    if (box_num >= 1 && box_num <= 9)
+                    {
+                        int idx = box_num - 1;
+                        if (strstr(key, "x1")) hitbox_x1[idx] = value;
+                        else if (strstr(key, "y1")) hitbox_y1[idx] = value;
+                        else if (strstr(key, "x2")) hitbox_x2[idx] = value;
+                        else if (strstr(key, "y2")) hitbox_y2[idx] = value;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Finalize last section
+    if (current_box_config)
+    {
+        for (int i = 0; i < 9; i++)
+        {
+            if (hurtbox_x1[i] != -5555 && hurtbox_y1[i] != -5555 && 
+                hurtbox_x2[i] != -5555 && hurtbox_y2[i] != -5555 &&
+                current_box_config->hurtbox_count < MAX_COLLISION_BOXES)
             {
                 CollisionBox box;
-                box.x = x1;
-                box.y = y1;
-                box.w = x2 - x1;
-                box.h = y2 - y1;
-                
-                if (strncmp(key, "HurtBox", 7) == 0 && current_box_config->hurtbox_count < MAX_COLLISION_BOXES)
-                {
-                    current_box_config->hurtboxes[current_box_config->hurtbox_count++] = box;
-                }
-                else if (strncmp(key, "HitBox", 6) == 0 && current_box_config->hitbox_count < MAX_COLLISION_BOXES)
-                {
-                    current_box_config->hitboxes[current_box_config->hitbox_count++] = box;
-                }
+                box.x = hurtbox_x1[i];
+                box.y = hurtbox_y1[i];
+                box.w = hurtbox_x2[i] - hurtbox_x1[i];
+                box.h = hurtbox_y2[i] - hurtbox_y1[i];
+                current_box_config->hurtboxes[current_box_config->hurtbox_count++] = box;
+            }
+        }
+        for (int i = 0; i < 9; i++)
+        {
+            if (hitbox_x1[i] != 5555 && hitbox_y1[i] != 5555 && 
+                hitbox_x2[i] != 5555 && hitbox_y2[i] != 5555 &&
+                current_box_config->hitbox_count < MAX_COLLISION_BOXES)
+            {
+                CollisionBox box;
+                box.x = hitbox_x1[i];
+                box.y = hitbox_y1[i];
+                box.w = hitbox_x2[i] - hitbox_x1[i];
+                box.h = hitbox_y2[i] - hitbox_y1[i];
+                current_box_config->hitboxes[current_box_config->hitbox_count++] = box;
             }
         }
     }
