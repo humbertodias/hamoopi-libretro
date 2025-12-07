@@ -11,3 +11,4 @@ cmake-build-debug
 
 # CodeQL build artifacts
 _codeql_*
+HAMOOPI
