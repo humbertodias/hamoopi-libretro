@@ -26,6 +26,10 @@ typedef struct {
 #define MAX_ANIM_FRAMES 30
 #define MAX_ANIMATIONS 20
 
+// Sentinel values for invalid collision boxes (matches HAMOOPI standalone convention)
+#define INVALID_HURTBOX_SENTINEL -5555
+#define INVALID_HITBOX_SENTINEL 5555
+
 typedef struct {
     BITMAP* frames[MAX_ANIM_FRAMES];
     int frame_count;
@@ -153,15 +157,14 @@ static CollisionBox get_hurtbox(Player* p)
 {
     CollisionBox box;
     
-    // Get current animation state ID
-    int state_id = 0;  // Default idle (100 in HAMOOPI)
-    if (p->state == 1) state_id = p->facing > 0 ? 420 : 410;  // Walk
+    // Get current animation state ID (HAMOOPI uses state IDs like 100 for idle, 420 for walk, etc.)
+    int state_id = 100;  // Default to idle stance (state 100 in HAMOOPI)
+    if (p->state == 1) state_id = p->facing > 0 ? 420 : 410;  // Walk forward/backward
     else if (p->state == 2) state_id = 300;  // Jump
     else if (p->state == 3) state_id = 151;  // Attack
     else if (p->state == 5) state_id = 200;  // Crouch
     else if (p->state == 6) state_id = 201;  // Crouch attack
     else if (p->is_blocking && p->is_crouching) state_id = 208;  // Crouch block
-    else state_id = 100;  // Idle stance
     
     // Try to load from INI data
     CollisionBoxConfig* config = find_collision_box_config(p->character_id, state_id, p->anim_frame);
@@ -1466,14 +1469,16 @@ static void load_chbox_ini(int char_id, const char* char_name)
     CollisionBoxConfig* current_box_config = NULL;
     
     // Temporary storage for building collision boxes (up to 9 boxes of each type)
-    int hurtbox_x1[9] = {-5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555};
-    int hurtbox_y1[9] = {-5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555};
-    int hurtbox_x2[9] = {-5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555};
-    int hurtbox_y2[9] = {-5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555, -5555};
-    int hitbox_x1[9] = {5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555};
-    int hitbox_y1[9] = {5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555};
-    int hitbox_x2[9] = {5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555};
-    int hitbox_y2[9] = {5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555, 5555};
+    // Using sentinel values to mark uninitialized boxes
+    int hurtbox_x1[9], hurtbox_y1[9], hurtbox_x2[9], hurtbox_y2[9];
+    int hitbox_x1[9], hitbox_y1[9], hitbox_x2[9], hitbox_y2[9];
+    
+    // Initialize all arrays with sentinel values
+    for (int i = 0; i < 9; i++)
+    {
+        hurtbox_x1[i] = hurtbox_y1[i] = hurtbox_x2[i] = hurtbox_y2[i] = INVALID_HURTBOX_SENTINEL;
+        hitbox_x1[i] = hitbox_y1[i] = hitbox_x2[i] = hitbox_y2[i] = INVALID_HITBOX_SENTINEL;
+    }
     
     while (pack_fgets(line, sizeof(line), fp))
     {
@@ -1490,8 +1495,8 @@ static void load_chbox_ini(int char_id, const char* char_name)
                 // Build collision boxes from accumulated data
                 for (int i = 0; i < 9; i++)
                 {
-                    if (hurtbox_x1[i] != -5555 && hurtbox_y1[i] != -5555 && 
-                        hurtbox_x2[i] != -5555 && hurtbox_y2[i] != -5555 &&
+                    if (hurtbox_x1[i] != INVALID_HURTBOX_SENTINEL && hurtbox_y1[i] != INVALID_HURTBOX_SENTINEL && 
+                        hurtbox_x2[i] != INVALID_HURTBOX_SENTINEL && hurtbox_y2[i] != INVALID_HURTBOX_SENTINEL &&
                         current_box_config->hurtbox_count < MAX_COLLISION_BOXES)
                     {
                         CollisionBox box;
@@ -1504,8 +1509,8 @@ static void load_chbox_ini(int char_id, const char* char_name)
                 }
                 for (int i = 0; i < 9; i++)
                 {
-                    if (hitbox_x1[i] != 5555 && hitbox_y1[i] != 5555 && 
-                        hitbox_x2[i] != 5555 && hitbox_y2[i] != 5555 &&
+                    if (hitbox_x1[i] != INVALID_HITBOX_SENTINEL && hitbox_y1[i] != INVALID_HITBOX_SENTINEL && 
+                        hitbox_x2[i] != INVALID_HITBOX_SENTINEL && hitbox_y2[i] != INVALID_HITBOX_SENTINEL &&
                         current_box_config->hitbox_count < MAX_COLLISION_BOXES)
                     {
                         CollisionBox box;
@@ -1521,8 +1526,8 @@ static void load_chbox_ini(int char_id, const char* char_name)
             // Reset temporary storage
             for (int i = 0; i < 9; i++)
             {
-                hurtbox_x1[i] = hurtbox_y1[i] = hurtbox_x2[i] = hurtbox_y2[i] = -5555;
-                hitbox_x1[i] = hitbox_y1[i] = hitbox_x2[i] = hitbox_y2[i] = 5555;
+                hurtbox_x1[i] = hurtbox_y1[i] = hurtbox_x2[i] = hurtbox_y2[i] = INVALID_HURTBOX_SENTINEL;
+                hitbox_x1[i] = hitbox_y1[i] = hitbox_x2[i] = hitbox_y2[i] = INVALID_HITBOX_SENTINEL;
             }
             
             int state_id, frame;
@@ -1552,28 +1557,36 @@ static void load_chbox_ini(int char_id, const char* char_name)
                 while (end > key && (*end == ' ' || *end == '\t')) *end-- = '\0';
                 
                 // Parse HurtBox or HitBox with index and coordinate
-                if (strncmp(key, "HurtBox", 7) == 0)
+                if (strncmp(key, "HurtBox", 7) == 0 && strlen(key) >= 9)
                 {
-                    int box_num = (key[7] - '0') * 10 + (key[8] - '0');  // e.g., "01" -> 1
-                    if (box_num >= 1 && box_num <= 9)
+                    // Validate that key[7] and key[8] are digits
+                    if (key[7] >= '0' && key[7] <= '9' && key[8] >= '0' && key[8] <= '9')
                     {
-                        int idx = box_num - 1;
-                        if (strstr(key, "x1")) hurtbox_x1[idx] = value;
-                        else if (strstr(key, "y1")) hurtbox_y1[idx] = value;
-                        else if (strstr(key, "x2")) hurtbox_x2[idx] = value;
-                        else if (strstr(key, "y2")) hurtbox_y2[idx] = value;
+                        int box_num = (key[7] - '0') * 10 + (key[8] - '0');  // e.g., "01" -> 1
+                        if (box_num >= 1 && box_num <= 9)
+                        {
+                            int idx = box_num - 1;
+                            if (strstr(key, "x1")) hurtbox_x1[idx] = value;
+                            else if (strstr(key, "y1")) hurtbox_y1[idx] = value;
+                            else if (strstr(key, "x2")) hurtbox_x2[idx] = value;
+                            else if (strstr(key, "y2")) hurtbox_y2[idx] = value;
+                        }
                     }
                 }
-                else if (strncmp(key, "HitBox", 6) == 0)
+                else if (strncmp(key, "HitBox", 6) == 0 && strlen(key) >= 8)
                 {
-                    int box_num = (key[6] - '0') * 10 + (key[7] - '0');  // e.g., "01" -> 1
-                    if (box_num >= 1 && box_num <= 9)
+                    // Validate that key[6] and key[7] are digits
+                    if (key[6] >= '0' && key[6] <= '9' && key[7] >= '0' && key[7] <= '9')
                     {
-                        int idx = box_num - 1;
-                        if (strstr(key, "x1")) hitbox_x1[idx] = value;
-                        else if (strstr(key, "y1")) hitbox_y1[idx] = value;
-                        else if (strstr(key, "x2")) hitbox_x2[idx] = value;
-                        else if (strstr(key, "y2")) hitbox_y2[idx] = value;
+                        int box_num = (key[6] - '0') * 10 + (key[7] - '0');  // e.g., "01" -> 1
+                        if (box_num >= 1 && box_num <= 9)
+                        {
+                            int idx = box_num - 1;
+                            if (strstr(key, "x1")) hitbox_x1[idx] = value;
+                            else if (strstr(key, "y1")) hitbox_y1[idx] = value;
+                            else if (strstr(key, "x2")) hitbox_x2[idx] = value;
+                            else if (strstr(key, "y2")) hitbox_y2[idx] = value;
+                        }
                     }
                 }
             }
@@ -1585,8 +1598,8 @@ static void load_chbox_ini(int char_id, const char* char_name)
     {
         for (int i = 0; i < 9; i++)
         {
-            if (hurtbox_x1[i] != -5555 && hurtbox_y1[i] != -5555 && 
-                hurtbox_x2[i] != -5555 && hurtbox_y2[i] != -5555 &&
+            if (hurtbox_x1[i] != INVALID_HURTBOX_SENTINEL && hurtbox_y1[i] != INVALID_HURTBOX_SENTINEL && 
+                hurtbox_x2[i] != INVALID_HURTBOX_SENTINEL && hurtbox_y2[i] != INVALID_HURTBOX_SENTINEL &&
                 current_box_config->hurtbox_count < MAX_COLLISION_BOXES)
             {
                 CollisionBox box;
@@ -1599,8 +1612,8 @@ static void load_chbox_ini(int char_id, const char* char_name)
         }
         for (int i = 0; i < 9; i++)
         {
-            if (hitbox_x1[i] != 5555 && hitbox_y1[i] != 5555 && 
-                hitbox_x2[i] != 5555 && hitbox_y2[i] != 5555 &&
+            if (hitbox_x1[i] != INVALID_HITBOX_SENTINEL && hitbox_y1[i] != INVALID_HITBOX_SENTINEL && 
+                hitbox_x2[i] != INVALID_HITBOX_SENTINEL && hitbox_y2[i] != INVALID_HITBOX_SENTINEL &&
                 current_box_config->hitbox_count < MAX_COLLISION_BOXES)
             {
                 CollisionBox box;
