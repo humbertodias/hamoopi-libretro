@@ -44,7 +44,7 @@ LIBS     = -lalleg
 ifeq ($(platform), unix)
    TARGET := $(TARGET_NAME)_libretro.so
    fpic := -fPIC
-   LDFLAGS += -Wl,--no-undefined -Wl,--version-script=link.T
+   LDFLAGS += -Wl,--no-undefined -Wl,--version-script=src/libretro/link.T
 else ifeq ($(platform), osx)
    TARGET := $(TARGET_NAME)_libretro.dylib
    fpic := -fPIC
@@ -54,22 +54,31 @@ else ifeq ($(platform), win)
    LDFLAGS += -static-libgcc -static-libstdc++
 endif
 
-# Source files
-SOURCES := libretro.cpp hamoopi_core.cpp
+# Directories
+SRC_DIR := src/libretro
+BUILD_DIR := build
 
-# Object files
-OBJECTS := $(SOURCES:.cpp=.o)
+# Source files
+SOURCES := $(SRC_DIR)/libretro.cpp $(SRC_DIR)/hamoopi_core.cpp
+
+# Object files  build/
+OBJECTS := $(addprefix $(BUILD_DIR)/,$(notdir $(SOURCES:.cpp=.o)))
 
 # Build rules
-all: $(TARGET)
+all: $(BUILD_DIR) $(TARGET)
 
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
+# final link
 $(TARGET): $(OBJECTS)
 	$(CXX) $(fpic) $(LDFLAGS) -o $@ $(OBJECTS) $(LIBS)
 
-%.o: %.cpp
+# .cpp → build/*.o
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $(fpic) $(INCFLAGS) -c -o $@ $<
 
 clean:
-	rm -f $(OBJECTS) $(TARGET)
+	rm -rf $(BUILD_DIR) $(TARGET)
 
 .PHONY: all clean

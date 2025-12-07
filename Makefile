@@ -1,23 +1,15 @@
 MAIN=HAMOOPI
 
-compile: clean
-	mkdir -p build \
-	&& cd build \
-	&& cmake .. \
-	&& make \
-	&& cp ${MAIN}* .. 
+build: clean
+	cmake -Bbuild
+	cmake --build build 
+	cp build/${MAIN}* .
 	
 clean:
-	rm -rf ${MAIN} *.exe *.o build/*
-
-docker:
-	docker build . -t a4-mingw
-
-shell:	docker
-	docker run -it --rm -v `pwd`:/tmp/workdir -w /tmp/workdir a4-mingw bash
+	rm -rf ${MAIN} *.exe *.o  *.so build
 
 zip:
-	zip -r ${MAIN}-${PLATFORM}.zip backgrounds chars docs sounds system tools LICENSE README.md SETUP.ini ${MAIN} ${MAIN}.exe
+	zip -r ${MAIN}-${PLATFORM}.zip data LICENSE README.md SETUP.ini ${MAIN} ${MAIN}.exe
 
 linux:
 	PLATFORM=linux CXX=g++ make compile	zip

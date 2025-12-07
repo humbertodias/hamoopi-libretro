@@ -366,7 +366,7 @@ static void load_animation(SpriteSet* sprites, int state_id, const char* char_na
     for (int frame = 0; frame < MAX_ANIM_FRAMES && anim->frame_count < MAX_ANIM_FRAMES; frame++)
     {
         // HAMOOPI specification uses 3-digit state IDs (e.g., 000, 151, 420)
-        snprintf(filename, sizeof(filename), "chars/%s/%03d_%02d.pcx", char_name, state_id, frame);
+        snprintf(filename, sizeof(filename), "data/chars/%s/%03d_%02d.pcx", char_name, state_id, frame);
         
         // Try to load the sprite
         BITMAP* sprite = load_bitmap(filename, NULL);
@@ -1300,7 +1300,7 @@ static void load_backgrounds()
         char config_path[256];
         char image_path[256];
         
-        snprintf(dir_name, sizeof(dir_name), "backgrounds/Background%d", i);
+        snprintf(dir_name, sizeof(dir_name), "data/backgrounds/Background%d", i);
         snprintf(config_path, sizeof(config_path), "%s/config.ini", dir_name);
         snprintf(image_path, sizeof(image_path), "%s/000_00.pcx", dir_name);
         
@@ -1353,7 +1353,7 @@ static void free_backgrounds()
 static void load_char_ini(int char_id, const char* char_name)
 {
     char filepath[256];
-    snprintf(filepath, sizeof(filepath), "chars/%s/char.ini", char_name);
+    snprintf(filepath, sizeof(filepath), "data/chars/%s/char.ini", char_name);
     
     PACKFILE* fp = pack_fopen(filepath, F_READ_PACKED);
     if (!fp)
@@ -1435,7 +1435,7 @@ static void load_char_ini(int char_id, const char* char_name)
 static void load_chbox_ini(int char_id, const char* char_name)
 {
     char filepath[256];
-    snprintf(filepath, sizeof(filepath), "chars/%s/chbox.ini", char_name);
+    snprintf(filepath, sizeof(filepath), "data/chars/%s/chbox.ini", char_name);
     
     PACKFILE* fp = pack_fopen(filepath, F_READ_PACKED);
     if (!fp)
@@ -1508,7 +1508,7 @@ static void load_chbox_ini(int char_id, const char* char_name)
 static void load_special_ini(int char_id, const char* char_name)
 {
     char filepath[256];
-    snprintf(filepath, sizeof(filepath), "chars/%s/special.ini", char_name);
+    snprintf(filepath, sizeof(filepath), "data/chars/%s/special.ini", char_name);
     
     PACKFILE* fp = pack_fopen(filepath, F_READ_PACKED);
     if (!fp)
