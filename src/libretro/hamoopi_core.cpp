@@ -16,10 +16,11 @@ static int frame_count = 0;
 // Input state for two players
 hamoopi_input_t hamoopi_input[2] = {};
 
-// Collision box types
+// Collision box types - stores raw offsets from INI file
+// These are relative to the player position and need facing direction applied
 typedef struct {
-    float x, y;     // World position (absolute coordinates)
-    float w, h;     // Width and height
+    float x1, y1;   // Top-left corner offset
+    float x2, y2;   // Bottom-right corner offset
 } CollisionBox;
 
 // Sprite animation system
@@ -145,10 +146,10 @@ static CollisionBoxConfig* find_collision_box_config(int char_id, int state_id, 
 static CollisionBox get_body_box(Player* p)
 {
     CollisionBox box;
-    box.x = p->x - 15;
-    box.y = p->y - 40;
-    box.w = 30;
-    box.h = 40;
+    box.x1 = p->x - 15;
+    box.y1 = p->y - 40;
+    box.x2 = p->x + 15;
+    box.y2 = p->y;
     return box;
 }
 
@@ -171,15 +172,18 @@ static CollisionBox get_hurtbox(Player* p)
     if (config && config->hurtbox_count > 0)
     {
         // Use first hurtbox from INI, adjusted for player position and facing
-        // Following HAMOOPI standalone formula: x = (player.x) + (facing * offset_x)
+        // Following HAMOOPI standalone formula:
+        // x1 = (P.x) + (P.Lado * HurtBox_x1)
+        // x2 = (P.x) + (P.Lado * HurtBox_x2)
         CollisionBox ini_box = config->hurtboxes[0];
         
-        // Apply facing direction to X coordinate (mirrors the box)
-        // Standalone formula: int hb_x1 = (P.x) + (P.Lado * HurtBox_x1)
-        float hb_x1 = p->x + (p->facing * ini_box.x);
-        float hb_x2 = p->x + (p->facing * (ini_box.x + ini_box.w));
+        // Apply facing direction to BOTH x1 and x2 separately (standalone formula)
+        float hb_x1 = p->x + (p->facing * ini_box.x1);
+        float hb_x2 = p->x + (p->facing * ini_box.x2);
+        float hb_y1 = p->y + ini_box.y1;
+        float hb_y2 = p->y + ini_box.y2;
         
-        // Normalize to ensure x1 < x2
+        // Normalize to ensure x1 < x2 (needed when facing left)
         if (hb_x1 > hb_x2)
         {
             float temp = hb_x1;
@@ -187,10 +191,11 @@ static CollisionBox get_hurtbox(Player* p)
             hb_x2 = temp;
         }
         
-        box.x = hb_x1;
-        box.y = p->y + ini_box.y;
-        box.w = hb_x2 - hb_x1;
-        box.h = ini_box.h;
+        // Return as absolute world coordinates
+        box.x1 = hb_x1;
+        box.y1 = hb_y1;
+        box.x2 = hb_x2;
+        box.y2 = hb_y2;
         return box;
     }
     
@@ -198,26 +203,26 @@ static CollisionBox get_hurtbox(Player* p)
     if (p->is_crouching)
     {
         // Smaller hurtbox when crouching (only 50% height)
-        box.x = p->x - 12;
-        box.y = p->y - 19;  // Half height, closer to ground
-        box.w = 24;
-        box.h = 19;
+        box.x1 = p->x - 12;
+        box.y1 = p->y - 19;  // Half height, closer to ground
+        box.x2 = p->x + 12;
+        box.y2 = p->y;
     }
     else if (p->is_blocking)
     {
         // Smaller hurtbox when blocking
-        box.x = p->x - 10;
-        box.y = p->y - 35;
-        box.w = 20;
-        box.h = 35;
+        box.x1 = p->x - 10;
+        box.y1 = p->y - 35;
+        box.x2 = p->x + 10;
+        box.y2 = p->y;
     }
     else
     {
         // Normal hurtbox
-        box.x = p->x - 12;
-        box.y = p->y - 38;
-        box.w = 24;
-        box.h = 38;
+        box.x1 = p->x - 12;
+        box.y1 = p->y - 38;
+        box.x2 = p->x + 12;
+        box.y2 = p->y;
     }
     return box;
 }
@@ -231,10 +236,10 @@ static CollisionBox get_hitbox(Player* p)
     if (p->state != 3 && p->state != 6)
     {
         // No active hitbox
-        box.x = p->x;
-        box.y = p->y;
-        box.w = 0;
-        box.h = 0;
+        box.x1 = p->x;
+        box.y1 = p->y;
+        box.x2 = p->x;
+        box.y2 = p->y;
         return box;
     }
     
@@ -246,15 +251,18 @@ static CollisionBox get_hitbox(Player* p)
     if (config && config->hitbox_count > 0 && p->attack_frame >= 2 && p->attack_frame <= 6)
     {
         // Use first hitbox from INI, adjusted for player position and facing
-        // Following HAMOOPI standalone formula: x = (player.x) + (facing * offset_x)
+        // Following HAMOOPI standalone formula:
+        // x1 = (P.x) + (P.Lado * HitBox_x1)
+        // x2 = (P.x) + (P.Lado * HitBox_x2)
         CollisionBox ini_box = config->hitboxes[0];
         
-        // Apply facing direction to X coordinate (mirrors the box)
-        // Standalone formula: int hb_x1 = (P.x) + (P.Lado * HitBox_x1)
-        float hb_x1 = p->x + (p->facing * ini_box.x);
-        float hb_x2 = p->x + (p->facing * (ini_box.x + ini_box.w));
+        // Apply facing direction to BOTH x1 and x2 separately (standalone formula)
+        float hb_x1 = p->x + (p->facing * ini_box.x1);
+        float hb_x2 = p->x + (p->facing * ini_box.x2);
+        float hb_y1 = p->y + ini_box.y1;
+        float hb_y2 = p->y + ini_box.y2;
         
-        // Normalize to ensure x1 < x2
+        // Normalize to ensure x1 < x2 (needed when facing left)
         if (hb_x1 > hb_x2)
         {
             float temp = hb_x1;
@@ -262,10 +270,11 @@ static CollisionBox get_hitbox(Player* p)
             hb_x2 = temp;
         }
         
-        box.x = hb_x1;
-        box.y = p->y + ini_box.y;
-        box.w = hb_x2 - hb_x1;
-        box.h = ini_box.h;
+        // Return as absolute world coordinates
+        box.x1 = hb_x1;
+        box.y1 = hb_y1;
+        box.x2 = hb_x2;
+        box.y2 = hb_y2;
         return box;
     }
     
@@ -275,17 +284,17 @@ static CollisionBox get_hitbox(Player* p)
         // Active attack frames
         if (p->facing > 0)
         {
-            box.x = p->x + 10;
-            box.y = p->y - 30;
-            box.w = 35;
-            box.h = 20;
+            box.x1 = p->x + 10;
+            box.y1 = p->y - 30;
+            box.x2 = p->x + 45;
+            box.y2 = p->y - 10;
         }
         else
         {
-            box.x = p->x - 45;
-            box.y = p->y - 30;
-            box.w = 35;
-            box.h = 20;
+            box.x1 = p->x - 45;
+            box.y1 = p->y - 30;
+            box.x2 = p->x - 10;
+            box.y2 = p->y - 10;
         }
     }
     else if (p->state == 6 && p->attack_frame >= 2 && p->attack_frame <= 6)
@@ -293,26 +302,26 @@ static CollisionBox get_hitbox(Player* p)
         // Crouch attack hitbox
         if (p->facing > 0)
         {
-            box.x = p->x + 10;
-            box.y = p->y - 15;
-            box.w = 35;
-            box.h = 15;
+            box.x1 = p->x + 10;
+            box.y1 = p->y - 15;
+            box.x2 = p->x + 45;
+            box.y2 = p->y;
         }
         else
         {
-            box.x = p->x - 45;
-            box.y = p->y - 15;
-            box.w = 35;
-            box.h = 15;
+            box.x1 = p->x - 45;
+            box.y1 = p->y - 15;
+            box.x2 = p->x - 10;
+            box.y2 = p->y;
         }
     }
     else
     {
         // No active hitbox
-        box.x = p->x;
-        box.y = p->y;
-        box.w = 0;
-        box.h = 0;
+        box.x1 = p->x;
+        box.y1 = p->y;
+        box.x2 = p->x;
+        box.y2 = p->y;
     }
     return box;
 }
@@ -326,36 +335,36 @@ static CollisionBox get_clash_box(Player* p)
     {
         if (p->facing > 0)
         {
-            box.x = p->x;
-            box.y = p->y - 30;
-            box.w = 45;
-            box.h = 25;
+            box.x1 = p->x;
+            box.y1 = p->y - 30;
+            box.x2 = p->x + 45;
+            box.y2 = p->y - 5;
         }
         else
         {
-            box.x = p->x - 45;
-            box.y = p->y - 30;
-            box.w = 45;
-            box.h = 25;
+            box.x1 = p->x - 45;
+            box.y1 = p->y - 30;
+            box.x2 = p->x;
+            box.y2 = p->y - 5;
         }
     }
     else
     {
-        box.x = p->x;
-        box.y = p->y;
-        box.w = 0;
-        box.h = 0;
+        box.x1 = p->x;
+        box.y1 = p->y;
+        box.x2 = p->x;
+        box.y2 = p->y;
     }
     return box;
 }
 
-// Box collision detection
+// Box collision detection - now uses x1,y1,x2,y2 format
 static bool boxes_overlap(CollisionBox a, CollisionBox b)
 {
-    return (a.x < b.x + b.w && 
-            a.x + a.w > b.x && 
-            a.y < b.y + b.h && 
-            a.y + a.h > b.y);
+    return (a.x1 < b.x2 && 
+            a.x2 > b.x1 && 
+            a.y1 < b.y2 && 
+            a.y2 > b.y1);
 }
 
 // Debug visualization for hitboxes
@@ -363,10 +372,10 @@ static bool show_debug_boxes = false;
 
 static void draw_debug_box(BITMAP* dest, CollisionBox box, int color)
 {
-    if (show_debug_boxes && box.w > 0 && box.h > 0)
+    if (show_debug_boxes && (box.x2 - box.x1) > 0 && (box.y2 - box.y1) > 0)
     {
-        rect(dest, (int)box.x, (int)box.y, 
-             (int)(box.x + box.w), (int)(box.y + box.h), color);
+        rect(dest, (int)box.x1, (int)box.y1, 
+             (int)box.x2, (int)box.y2, color);
     }
 }
 
@@ -905,10 +914,10 @@ static void spawn_projectile(int owner, int type, float x, float y, float vx, fl
             projectiles[i].lifetime = 180; // 3 seconds max
             
             // Set projectile hitbox based on type
-            projectiles[i].hitbox.x = x - 15;
-            projectiles[i].hitbox.y = y - 15;
-            projectiles[i].hitbox.w = 30;
-            projectiles[i].hitbox.h = 30;
+            projectiles[i].hitbox.x1 = x - 15;
+            projectiles[i].hitbox.y1 = y - 15;
+            projectiles[i].hitbox.x2 = x + 15;
+            projectiles[i].hitbox.y2 = y + 15;
             break;
         }
     }
@@ -926,8 +935,10 @@ static void update_projectiles(void)
         projectiles[i].lifetime--;
         
         // Update hitbox position
-        projectiles[i].hitbox.x = projectiles[i].x - 15;
-        projectiles[i].hitbox.y = projectiles[i].y - 15;
+        projectiles[i].hitbox.x1 = projectiles[i].x - 15;
+        projectiles[i].hitbox.y1 = projectiles[i].y - 15;
+        projectiles[i].hitbox.x2 = projectiles[i].x + 15;
+        projectiles[i].hitbox.y2 = projectiles[i].y + 15;
         
         // Deactivate if out of bounds or expired
         if (projectiles[i].x < 0 || projectiles[i].x > 640 ||
@@ -1500,10 +1511,11 @@ static void load_chbox_ini(int char_id, const char* char_name)
                         current_box_config->hurtbox_count < MAX_COLLISION_BOXES)
                     {
                         CollisionBox box;
-                        box.x = hurtbox_x1[i];
-                        box.y = hurtbox_y1[i];
-                        box.w = hurtbox_x2[i] - hurtbox_x1[i];
-                        box.h = hurtbox_y2[i] - hurtbox_y1[i];
+                        // Store raw x1, y1, x2, y2 values from INI (not converted to x,y,w,h)
+                        box.x1 = hurtbox_x1[i];
+                        box.y1 = hurtbox_y1[i];
+                        box.x2 = hurtbox_x2[i];
+                        box.y2 = hurtbox_y2[i];
                         current_box_config->hurtboxes[current_box_config->hurtbox_count++] = box;
                     }
                 }
@@ -1514,10 +1526,11 @@ static void load_chbox_ini(int char_id, const char* char_name)
                         current_box_config->hitbox_count < MAX_COLLISION_BOXES)
                     {
                         CollisionBox box;
-                        box.x = hitbox_x1[i];
-                        box.y = hitbox_y1[i];
-                        box.w = hitbox_x2[i] - hitbox_x1[i];
-                        box.h = hitbox_y2[i] - hitbox_y1[i];
+                        // Store raw x1, y1, x2, y2 values from INI (not converted to x,y,w,h)
+                        box.x1 = hitbox_x1[i];
+                        box.y1 = hitbox_y1[i];
+                        box.x2 = hitbox_x2[i];
+                        box.y2 = hitbox_y2[i];
                         current_box_config->hitboxes[current_box_config->hitbox_count++] = box;
                     }
                 }
@@ -1605,10 +1618,11 @@ static void load_chbox_ini(int char_id, const char* char_name)
                 current_box_config->hurtbox_count < MAX_COLLISION_BOXES)
             {
                 CollisionBox box;
-                box.x = hurtbox_x1[i];
-                box.y = hurtbox_y1[i];
-                box.w = hurtbox_x2[i] - hurtbox_x1[i];
-                box.h = hurtbox_y2[i] - hurtbox_y1[i];
+                // Store raw x1, y1, x2, y2 values from INI (not converted to x,y,w,h)
+                box.x1 = hurtbox_x1[i];
+                box.y1 = hurtbox_y1[i];
+                box.x2 = hurtbox_x2[i];
+                box.y2 = hurtbox_y2[i];
                 current_box_config->hurtboxes[current_box_config->hurtbox_count++] = box;
             }
         }
@@ -1619,10 +1633,11 @@ static void load_chbox_ini(int char_id, const char* char_name)
                 current_box_config->hitbox_count < MAX_COLLISION_BOXES)
             {
                 CollisionBox box;
-                box.x = hitbox_x1[i];
-                box.y = hitbox_y1[i];
-                box.w = hitbox_x2[i] - hitbox_x1[i];
-                box.h = hitbox_y2[i] - hitbox_y1[i];
+                // Store raw x1, y1, x2, y2 values from INI (not converted to x,y,w,h)
+                box.x1 = hitbox_x1[i];
+                box.y1 = hitbox_y1[i];
+                box.x2 = hitbox_x2[i];
+                box.y2 = hitbox_y2[i];
                 current_box_config->hitboxes[current_box_config->hitbox_count++] = box;
             }
         }
@@ -2577,7 +2592,7 @@ void hamoopi_run_frame(void)
             CollisionBox p1_clash = get_clash_box(p1);
             CollisionBox p2_clash = get_clash_box(p2);
             
-            if (boxes_overlap(p1_clash, p2_clash) && p1_clash.w > 0 && p2_clash.w > 0)
+            if (boxes_overlap(p1_clash, p2_clash) && (p1_clash.x2 - p1_clash.x1) > 0 && (p2_clash.x2 - p2_clash.x1) > 0)
             {
                 // Attacks clash! Cancel both attacks
                 p1->state = 0;
