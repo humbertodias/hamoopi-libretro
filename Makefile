@@ -1,23 +1,26 @@
-MAIN=HAMOOPI
+TARGET=HAMOOPI
+
+# Platform detection
+ifeq ($(platform),)
+   platform = unix
+   ifeq ($(shell uname -a),)
+      platform = win
+   else ifneq ($(findstring MINGW,$(shell uname -a)),)
+      platform = win
+   else ifneq ($(findstring Darwin,$(shell uname -a)),)
+      platform = osx
+   else ifneq ($(findstring win,$(shell uname -a)),)
+      platform = win
+   endif
+endif
 
 build: clean
 	cmake -Bbuild
 	cmake --build build 
-	cp build/${MAIN}* .
+	cp build/${TARGET}* .
 	
 clean:
-	rm -rf ${MAIN} *.exe *.o  *.so build
+	rm -rf ${TARGET} *.exe *.o  *.so build
 
 zip:
-	zip -r ${MAIN}-${PLATFORM}.zip data LICENSE README.md SETUP.ini ${MAIN} ${MAIN}.exe
-
-linux:
-	PLATFORM=linux CXX=g++ make compile	zip
-
-windows:
-	PLATFORM=windows CXX=i686-w64-mingw32-g++ make compile zip
-
-mac:
-	PLATFORM=mac CXX=clang make compile zip
-
-zip-all: linux windows mac
+	zip -r ${TARGET}-${platform}.zip data LICENSE README.md SETUP.ini ${TARGET} ${TARGET}.exe
