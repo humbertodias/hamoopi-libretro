@@ -17,4 +17,4 @@ Please read the documents in the [docs](docs) folder for more information on how
 ## Libretro Core
 
 HAMOOPI is now available as a libretro core, allowing it to run on RetroArch and other libretro-compatible frontends! 
-See [README.libretro.md](README.libretro.md) for build and installation instructions.
+See [README.libretro](README.libretro.md) for build and installation instructions.
